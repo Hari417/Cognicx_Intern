@@ -1,2 +1,2 @@
-account_number,amount,years,maturity_amount ,maturity_amount
-5678901234,5000,5,,6700.0
+account_number,amount,years,maturity_amount
+1234567890,5000.0,5.0,6700.0

@@ -92,7 +92,7 @@ class AmericanExpressChatBot:
                 st.markdown(f"**Credit Score:** {user.get('credit_score', '-')}")
                 st.markdown(f"**Monthly Salary:** ₹{user.get('monthly_salary', '-')}")
                 st.markdown("---")
-                nav = st.radio("Go to:", ["Chat", "Profile", "Loans", "Deposits"], index=["Chat", "Profile", "Loans", "Deposits"].index(st.session_state.nav_page))
+                nav = st.radio("Go to:", ["Chat", "Profile", "Loans", "Deposits"], index=["Chat", "Profile", "Loans", "Deposits"].index(st.session_state.nav_page) if st.session_state.nav_page in ["Chat", "Profile", "Loans", "Deposits"] else 0)
                 st.session_state.nav_page = nav
                 if st.button("Logout"):
                     st.session_state.user_profile_set = False
@@ -162,7 +162,6 @@ class AmericanExpressChatBot:
     def login_existing_user(self):
         st.subheader("🔐 Existing Customer Login")
         acc_no = st.text_input("Enter Account Number", help="Your 10-digit account number.")
-
         if st.button("Login"):
             if not acc_no or len(acc_no) != 10 or not acc_no.isdigit():
                 st.error("Please enter a valid 10-digit account number.")
@@ -179,22 +178,133 @@ class AmericanExpressChatBot:
                 st.error(result)
 
     def display_chat(self):
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+        st.markdown(
+            '''
+            <style>
+            .chat-container {
+                max-height: 60vh;
+                overflow-y: auto;
+                padding: 10px;
+                background: #0d1117;
+                border-radius: 10px;
+                margin-bottom: 10px;
+            }
+            .chat-bubble {
+                display: flex;
+                margin-bottom: 10px;
+            }
+            .chat-bubble.user {
+                justify-content: flex-end;
+            }
+            .chat-bubble.bot {
+                justify-content: flex-start;
+            }
+            .bubble {
+                max-width: 70%;
+                padding: 10px 16px;
+                border-radius: 18px;
+                font-size: 1rem;
+                line-height: 1.4;
+            }
+            .bubble.user {
+                background: #238636;
+                color: white;
+                border-bottom-right-radius: 4px;
+            }
+            .bubble.bot {
+                background: #161b22;
+                color: #c9d1d9;
+                border-bottom-left-radius: 4px;
+            }
+            </style>
+            <div class="chat-container" id="chat-container">
+            ''',
+            unsafe_allow_html=True
+        )
         for msg in st.session_state.messages:
             role = msg["role"]
-            style = "user" if role == "user" else "bot"
-            label = "You:" if role == "user" else "AmExBot:"
-            st.markdown(f"<div class='chat-message'><span class='{style}'>{label}</span> {msg['content']}</div>",
-                        unsafe_allow_html=True)
+            bubble_class = "user" if role == "user" else "bot"
+            avatar = "🧑" if role == "user" else "🤖"
+            st.markdown(
+                f'''
+                <div class="chat-bubble {bubble_class}">
+                    <div class="bubble {bubble_class}">{avatar} {msg["content"]}</div>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
         st.markdown("</div>", unsafe_allow_html=True)
+        # Add a little JS to auto-scroll to the bottom
+        st.markdown(
+            '''
+            <script>
+            var chatContainer = window.parent.document.getElementById("chat-container");
+            if (chatContainer) { chatContainer.scrollTop = chatContainer.scrollHeight; }
+            </script>
+            ''',
+            unsafe_allow_html=True
+        )
 
     def display_profile(self):
         user = st.session_state.user_profile
         st.subheader("👤 Profile Information")
-        st.write(f"**Name:** {user.get('name', '-')}")
-        st.write(f"**Account #:** {user.get('account_number', '-')}")
-        st.write(f"**Credit Score:** {user.get('credit_score', '-')}")
-        st.write(f"**Monthly Salary:** ₹{user.get('monthly_salary', '-')}")
+        if 'edit_profile' not in st.session_state:
+            st.session_state.edit_profile = False
+
+        if not st.session_state.edit_profile:
+            def show_field(label, key):
+                val = user.get(key, None)
+                if val is None or str(val).strip() == '':
+                    val = 'NAN'
+                st.write(f"**{label}:** {val}")
+            show_field("Name", "name")
+            show_field("Account #", "account_number")
+            show_field("Credit Score", "credit_score")
+            show_field("Balance", "balance")
+            show_field("Account Type", "account_type")
+            show_field("Branch", "branch")
+            show_field("IFSC", "ifsc")
+            show_field("Phone", "phone")
+            show_field("Email", "email")
+            show_field("Monthly Salary", "monthly_salary")
+            if st.button("Edit Profile"):
+                st.session_state.edit_profile = True
+        else:
+            st.info("Edit your profile below. Account number cannot be changed.")
+            with st.form("edit_profile_form"):
+                name = st.text_input("Name", value=user.get("name", ""))
+                acc_no = st.text_input("Account #", value=user.get("account_number", ""), disabled=True)
+                credit_score = st.text_input("Credit Score", value=str(user.get("credit_score", "")))
+                balance = st.text_input("Balance", value=str(user.get("balance", "")))
+                account_type = st.text_input("Account Type", value=user.get("account_type", ""))
+                branch = st.text_input("Branch", value=user.get("branch", ""))
+                ifsc = st.text_input("IFSC", value=user.get("ifsc", ""))
+                phone = st.text_input("Phone", value=user.get("phone", ""))
+                email = st.text_input("Email", value=user.get("email", ""))
+                monthly_salary = st.text_input("Monthly Salary", value=str(user.get("monthly_salary", "")))
+                submitted = st.form_submit_button("Save Changes")
+                if submitted:
+                    # Update the CSV and session state
+                    self.user_manager.update_user_info_if_missing(
+                        acc_no,
+                        name=name,
+                        credit_score=credit_score,
+                        balance=balance,
+                        account_type=account_type,
+                        branch=branch,
+                        ifsc=ifsc,
+                        phone=phone,
+                        email=email,
+                        monthly_salary=monthly_salary
+                    )
+                    # Reload the updated profile
+                    success, updated_profile = self.user_manager.login_user(acc_no)
+                    if success:
+                        st.session_state.user_profile = updated_profile
+                        st.session_state.edit_profile = False
+                        st.success("Profile updated successfully!")
+                    else:
+                        st.error("Failed to update profile.")
 
     def display_loans(self):
         user = st.session_state.user_profile
@@ -221,6 +331,10 @@ class AmericanExpressChatBot:
         else:
             nav = st.session_state.nav_page
             if nav == "Chat":
+                if not st.session_state.messages:
+                    user_name = st.session_state.user_profile.get('name', 'there')
+                    greeting = f"Hello {user_name}! How can I assist you today?"
+                    st.session_state.messages.append({"role": "assistant", "content": greeting})
                 self.display_chat()
                 with st.form("chat_form", clear_on_submit=True):
                     user_input = st.text_input("Type your message...",

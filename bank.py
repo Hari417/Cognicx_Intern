@@ -77,6 +77,41 @@ class BankManager:
             "message": f"✅ {loan_type.capitalize()} Loan Approved! EMI: ₹{emi:.2f}/month for {years} years. Loan details saved."
         }
 
+    def create_fixed_deposit(self, account_number, amount, years):
+        try:
+            amount = float(amount)
+            years = float(years)
+        except Exception as e:
+            print("ERROR: Invalid FD input:", amount, years)
+            return {"status": "error", "message": "Invalid amount or years for fixed deposit."}
+        rate = 0.068  # 6.8% simple interest
+        maturity = amount + (amount * rate * years)
+        fd_entry = {
+            "account_number": account_number,
+            "amount": amount,
+            "years": years,
+            "maturity_amount": round(maturity, 2)
+        }
+        print(f"DEBUG: Writing fixed deposit entry for account {account_number}: {fd_entry}")
+        print("DEBUG: Writing to", os.path.abspath(self.fd_record_path))
+        try:
+            if os.path.exists(self.fd_record_path):
+                fd_df = pd.read_csv(self.fd_record_path)
+                fd_df = pd.concat([fd_df, pd.DataFrame([fd_entry])], ignore_index=True)
+            else:
+                fd_df = pd.DataFrame([fd_entry])
+            fd_df.to_csv(self.fd_record_path, index=False)
+            print("DEBUG: Write successful")
+        except Exception as e:
+            print("ERROR writing to CSV:", e)
+        return fd_entry
+
+    def get_fixed_deposits(self, account_number):
+        if not os.path.exists(self.fd_record_path):
+            return []
+        df = pd.read_csv(self.fd_record_path, dtype={"account_number": str})
+        return df[df["account_number"] == str(account_number)].copy().to_dict('records')  # type: ignore
+
     def update_user_info_if_missing(self, account_number, **kwargs):
         """DEPRECATED: This logic has been moved to UserDataManager in data.py"""
         pass
@@ -91,38 +126,9 @@ class BankManager:
     def get_balance(self, account_number):
         user = self.load_user_data(account_number)
         if user and "balance" in user:
-            return user["balance"]
-        return None
-
-    def create_fixed_deposit(self, account_number, amount, years):
-        rate = 0.068  # 6.8% simple interest
-        maturity = amount + (amount * rate * years)
-        fd_entry = {
-            "account_number": account_number,
-            "amount": amount,
-            "years": years,
-            "maturity_amount": round(maturity, 2)
-        }
-
-        print(f"DEBUG: Writing fixed deposit entry for account {account_number}: {fd_entry}")
-        print("DEBUG: Writing to", os.path.abspath(self.fd_record_path))
-        try:
-            if os.path.exists(self.fd_record_path):
-                fd_df = pd.read_csv(self.fd_record_path)
-                # Ensure multiple deposits can be made by appending
-                fd_df = pd.concat([fd_df, pd.DataFrame([fd_entry])], ignore_index=True)
+            balance = user["balance"]
+            if balance and str(balance).strip() and str(balance).strip().lower() != "data not available":
+                return balance
             else:
-                fd_df = pd.DataFrame([fd_entry])
-            
-            fd_df.to_csv(self.fd_record_path, index=False)
-            print("DEBUG: Write successful")
-        except Exception as e:
-            print("ERROR writing to CSV:", e)
-
-        return fd_entry
-
-    def get_fixed_deposits(self, account_number):
-        if not os.path.exists(self.fd_record_path):
-            return []
-        df = pd.read_csv(self.fd_record_path, dtype={"account_number": str})
-        return df[df["account_number"] == str(account_number)].copy().to_dict('records')  # type: ignore 
+                return "Balance not available. Please update your account information."
+        return "Account not found." 
